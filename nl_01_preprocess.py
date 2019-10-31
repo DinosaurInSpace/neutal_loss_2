@@ -58,21 +58,17 @@ class PreprocessLoop(object):
 
 
     def n_loss_only(self, lir):
-        # if str(lir == 'inf'
-        # if float(lir) > 1000000:
-        if str(lir) == 'inf':
+        if float(lir) == 1:
             return True
         else:
             return False
 
 
     def n_loss_wparent(self, lir):
-        if float(lir) < 0.0000001:
-            return False
-        elif float(lir) > 1000000:
-            return False
-        else:
+        if float(lir) > 0 and float(lir) < 1:
             return True
+        else:
+            return False
 
 
     def join_nl_searches(self):
@@ -95,6 +91,7 @@ class PreprocessLoop(object):
             n_loss_o = 'n_loss_only_' + str(formula)
             n_loss_wp = 'n_loss_wparent_' + str(formula)
             lir = 'loss_intensity_share_' + str(formula)
+            print(lir)
             input_df[n_loss_o] = input_df[lir].apply(lambda row: self.n_loss_only(row))
             input_df[n_loss_wp] = input_df[lir].apply(lambda row: self.n_loss_wparent(row))
 
@@ -323,7 +320,7 @@ hmdb_df.rename({'H2Ocde_Present':'H2O_Present'}, axis=1, inplace=True)
 # Manual for now, ID of bits in expert
 hmdb_df['expert_key'] = hmdb_df.apply(lambda x: keys(x), axis = 1 )
 
-# Output, 147s
+# Output, 148s
 output_df.to_pickle('nl_01_output_df.pickle')
 hmdb_df.to_pickle('nl_01_hmdb_df.pickle')
 

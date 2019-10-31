@@ -5,10 +5,10 @@ This file contains the parameters to be using for filtering the joined dataframe
 
 """
 
-search_params = {'models': ['decision_tree'],
+search_params = {'models': ['random_forest'],
                  'polarities': ['negative', 'positive'],
-                 'struct_targets': ['NH2', 'CN', 'CO2H', 'COH', 'H2Oe'],
-                 'obs_loss_types': ['n_loss_only', 'n_loss_wparent'],
+                 'struct_targets': ['H2Oe'],
+                 'obs_loss_types': ['n_loss_wparent'],
                  'theo_predictions': ['expert', 'bits', 'fp_1024_expert'],
                  'any_fdrs': [0.2 , 0.1 , 0.05],
                  'any_colocalizations': [0, 0.5, 0.75, 0.9, 0.95]

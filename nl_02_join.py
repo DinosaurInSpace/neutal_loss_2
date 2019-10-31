@@ -268,7 +268,7 @@ final_df.rename(columns={'formula_x': 'formula'}, inplace=True)
 
 final_df.to_pickle('nl_02_join_final.pickle')
 
-# 3513! Slow, but reduced fails on find MCS.
+# 13,937! Slow, but reduced fails on find MCS.
 # Optional feature, could be removed for speed...
 
 print('\nExecuted without error\n')

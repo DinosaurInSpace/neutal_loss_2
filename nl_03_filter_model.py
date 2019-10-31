@@ -1,7 +1,8 @@
 import pandas as pd
 from structures_to_search_dicts import target_structures, target_loss_formula
 import time
-from nl_03_params import search_params, model_params
+from nl_03_params import search_params
+from nl_03_params import model_params
 import numpy as np
 
 from sklearn.model_selection import train_test_split
@@ -183,10 +184,11 @@ class BuildTest(object):
                                           random_state=y).fit(x_train, y_train)
 
         elif model is 'random_forest':
+            # Error if features < max features
             x = model_params['random_forest']['max_features']
             y = model_params['random_forest']['n_estimators']
             z = model_params['random_forest']['random_state']
-            return RandomForestClassifier(max_features=x,
+            return RandomForestClassifier(max_features=7,
                                           n_estimators=y,
                                           random_state=z).fit(x_train, y_train)
 
@@ -215,9 +217,11 @@ class BuildTest(object):
         filter = curr_filter_series
         print(filter.n)
         print('\n')
+        print(filter)
 
         # Build columns and df
         col_f_filter = self.build_columns(filter)
+
         current_df = self.join_df[col_f_filter].copy(deep=True)
 
         # Filter on fdr, coloc, and polarity
@@ -316,7 +320,7 @@ model_df = setup_models.main_loop(filters)
 
 out_df = pd.DataFrame(out_list)
 out_df = tidy(out_df)
-out_df.to_pickle('nl_03_temp.pickle')
+out_df.to_pickle('nl_03_water_both.pickle')
 
 print('\nExecuted without error\n')
 elapsed_time = time.time() - start_time
