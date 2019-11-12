@@ -198,6 +198,13 @@ class ManyID(object):
                         'expert': self.bin_array_avg(list(hmdb_hits.expert))[0],
                         'fp_1024_expert': self.bin_array_avg(list(hmdb_hits.fp_1024_expert))[0],
                         'expert_key': hmdb_hits.expert_key.iloc[0],
+                        'trues': hmdb_hits.trues.mode().iloc[0],
+                        'falses': hmdb_hits.falses.mode().iloc[0],
+                        'rando': hmdb_hits.rando.mode().iloc[0],
+                        'mordreds': self.bin_array_avg(list(hmdb_hits.mordreds))[0],
+                        'mord_norms': self.bin_array_avg(list(hmdb_hits.mord_norms))[0],
+                        'fp_feats': self.bin_array_avg(list(hmdb_hits.fp_feats))[0],
+                        'formulas': hmdb_hits.x.mode().iloc[0],
                         'join_index': join_index
                         }
 
@@ -243,8 +250,8 @@ start_time = time.time()
 # Setup classes
 hmdb_joined_df = pd.DataFrame()
 formula_dict = target_loss_formula
-input_file = 'nl_01_output_df.pickle'
-input_hmdb = 'nl_01_hmdb_df.pickle'
+input_file = 'en_nl_01_output_df_exptl.pickle'
+input_hmdb = 'en_nl_01_hmdb_df_exptl.pickle'
 
 input_df = pd.read_pickle(input_file)
 hmdb_df = pd.read_pickle(input_hmdb)
@@ -266,7 +273,7 @@ final_df = pd.concat([one_join, many_join], ignore_index=True, join="outer", sor
 final_df.drop('formula_y', axis=1, inplace=True)
 final_df.rename(columns={'formula_x': 'formula'}, inplace=True)
 
-final_df.to_pickle('nl_02_join_final.pickle')
+final_df.to_pickle('en_nl_02_join_exptl.pickle')
 
 # 13,937! Slow, but reduced fails on find MCS.
 # Optional feature, could be removed for speed...

@@ -45,7 +45,7 @@ target_nl_mass = {
     'Cyano': 27.0109,
     'Amino': 17.0266,
     'Aldehyde': 30.0106,
-    'Carboxylic': 46.0055,
+    'Carboxylic': 46.0055,  #43.989829
 }
 
 #Short encoding for column labels etc

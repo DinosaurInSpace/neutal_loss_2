@@ -5,17 +5,10 @@ import rdkit.Chem as Chem
 from rdkit.Chem import rdmolops
 from rdkit.Chem import rdMolDescriptors
 from rdkit.Chem.AllChem import GetMorganFingerprintAsBitVect
+from rdkit.Chem.rdMolDescriptors import CalcMolFormula
 import rdkit.DataStructs
 import time
-
-#import pandas
-#from pandas import DataFrame as df
-#import pickle
-#import matplotlib.pyplot as plt
-#from sklearn.metrics import jaccard_score
-#from structures_to_search_dicts import target_nl_mass, target_short_codes
-#from rdkit.Chem import AllChem
-#from rdkit.Chem import Fragments
+import random
 
 
 """
@@ -29,6 +22,9 @@ filtering/model building/testing.
 Steps include:
 1) Parse metaspace search results and export pickle.     
 2) Parse hmdb and apply RDkit to molecules in 1) and export pickle
+
+Previous script in series is:
+"nl_00_hdmb_pre.py"
 
 Next script in series is:
 "nl_02_join.py"
@@ -260,17 +256,61 @@ class hmdb_rd(object):
         searched_df['expert'] = list_of_lists
         return searched_df
 
-    def fp_1024_expert(self, fp_1024, fp_expert):
-        concat = fp_1024 + fp_expert
+    def concat(self, one, two):
+        concat = one + two
         return concat
 
 
-    def fp_1024_experts(self, searched_df):
+    def fp_1024_experts(self, x_df):
         # Fingerprint concat. of 1024 and expert
-        x_df = searched_df
         id = 'fp_1024_expert'
+        x_df[id] = x_df.apply(lambda x: self.concat(x['bits'], x['expert']), axis=1)
+        return x_df
 
-        x_df[id] = x_df.apply(lambda x: self.fp_1024_expert(x['bits'], x['expert']), axis=1)
+
+    def bool_fill(selfs, bool):
+        if bool is True:
+            return True
+        elif bool is False:
+            return False
+        else:
+            tf = random.choice([True, False])
+            return tf
+
+    def trues(self, x_df):
+        id = 'trues'
+        x_df[id] = x_df.apply(lambda x: self.bool_fill(True), axis=1)
+        return x_df
+
+
+    def falses(self, x_df):
+        id = 'falses'
+        x_df[id] = x_df.apply(lambda x: self.bool_fill(False), axis=1)
+        return x_df
+
+
+    def randoms(self, x_df):
+        id = 'rando'
+        x_df[id] = x_df.apply(lambda x: self.bool_fill('Random'), axis=1)
+        return x_df
+
+
+    def fp_feats(self, x_df):
+        # Fingerprint concat. with features
+        id = 'fp_feats'
+        x_df[id] = x_df.apply(lambda x: self.concat(x['bits'], x['mord_norm']), axis=1)
+        return x_df
+
+
+    def formula(self, mol):
+        form = CalcMolFormula(mol)
+        return form
+
+
+    def formulas(self, x_df):
+        # Fingerprint concat. with features
+        id = 'formula'
+        x_df[id] = x_df.apply(lambda x: self.formula(x['Molecule']), axis=1)
         return x_df
 
 
@@ -289,6 +329,15 @@ class hmdb_rd(object):
         hmdb_searched = self.fingerprint_1024(hmdb_searched)
         hmdb_searched = self.expert_fps(hmdb_searched)
         hmdb_searched = self.fp_1024_experts(hmdb_searched)
+        hmdb_searched = self.trues(hmdb_searched)
+        hmdb_searched = self.falses(hmdb_searched)
+        hmdb_searched = self.randoms(hmdb_searched)
+
+        hmdb_searched = self.mordreds(hmdb_searched)
+        hmdb_searched = self.mord_norms(hmdb_searched)
+        hmdb_searched = self.fp_feats(hmdb_searched)
+        hmdb_searched = self.formulas(hmdb_searched)
+
 
         return hmdb_searched
 
@@ -305,7 +354,7 @@ start_time = time.time()
 
 # Setup main loop classes
 input_dict = target_loss_formula
-input_file = 'nl_stats.pickle'
+input_file = 'en_nl_exptl_stats.pickle'
 input_df = pd.read_pickle(input_file)
 pre_loop = PreprocessLoop(input_dict, input_df)
 db_loop = hmdb_rd(input_dict)
@@ -321,8 +370,8 @@ hmdb_df.rename({'H2Ocde_Present':'H2O_Present'}, axis=1, inplace=True)
 hmdb_df['expert_key'] = hmdb_df.apply(lambda x: keys(x), axis = 1 )
 
 # Output, 148s
-output_df.to_pickle('nl_01_output_df.pickle')
-hmdb_df.to_pickle('nl_01_hmdb_df.pickle')
+output_df.to_pickle('en_nl_01_output_df_exptl.pickle')
+hmdb_df.to_pickle('en_nl_01_hmdb_df_exptl.pickle')
 
 print('\nExecuted without error\n')
 
