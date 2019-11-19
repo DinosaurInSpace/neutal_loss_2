@@ -234,27 +234,28 @@ class BuildTest(object):
         current_df = self.filter_3x(current_df, filter)
 
         # nans should,be gone and types should be consistent...
-        obs_y = np.array(current_df.iloc[:,-2]) #.astype('bool'))
-        theo_x = np.array(current_df.iloc[:, -1]) #.astype('bool'))
-        #current_df['out_x'] = current_df.iloc[:, -1].apply(list)
-        #theo_x = np.array(list(current_df['out_x'])).astype(bool)
+        obs_y_col = filter.obs_loss_type + "_" + filter.struct_target
+        print(obs_y_col)
+        print(filter.prediction)
+        obs_y = np.array(current_df[obs_y_col])
+        theo_x = np.array(current_df[filter.prediction])
 
         # No fancy stuff needed to directly compare two columns:
-
-        if type(theo_x[0]).__module__ != np.__name__ and type(theo_x[0]) != list:
+        if filter.prediction in search_params['direct_comp']:
+            print('direct')
             results = self.confuse(obs_y, theo_x)
             size = len(obs_y)
             t_size = sum(obs_y)
             accuracy_test = results[3]
             accuracy_train = accuracy_test
-            specificity = results[0]
-            sensitivity = results[1]
+            sensitivity = results[0]
+            specificity = results[1]
             f1 = results[2]
 
-        else:
+        elif filter.prediction in search_params['theo_predictions']:
+            print('complicated')
             obs_y = list(obs_y)
             theo_x = list(theo_x)
-            print('complicated')
             x_train, x_test, y_train, y_test = train_test_split(theo_x, obs_y, random_state=0)
             train_l = len(y_train)
             test_l = len(y_test)
@@ -272,8 +273,8 @@ class BuildTest(object):
 
             y_predict = model.predict(x_test)
             results = self.confuse(y_test, y_predict)
-            specificity = results[0]
-            sensitivity = results[1]
+            sensitivity = results[0]
+            specificity = results[1]
             f1 = results[2]
 
         # Add values to filter and return
@@ -281,8 +282,8 @@ class BuildTest(object):
         filter['n_train_test_true'] = t_size
         filter['accuracy_train'] = accuracy_train
         filter['accuracy_test'] = accuracy_test
-        filter['specificity'] = specificity
         filter['sensitivity'] = sensitivity
+        filter['specificity'] = specificity
         filter['f1'] = f1
 
         self.out_list.append(filter)

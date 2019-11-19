@@ -228,7 +228,8 @@ hmdb_df = db_loop.hmdb_rd_loop()
 # Output, 148s
 hmdb_df.to_pickle(output_path)
 elapsed_time = time.time() - start_time
-# 12,411s
+
+# 12,411s for full HMDB
 print ('Elapsed time:\n')
 print (elapsed_time)
 

@@ -61,8 +61,7 @@ class OneID(object):
         # Changes list type to str, then simple join on id.
         one_id_df = self.column_clean(one_id_df)
         #print(type(one_id_df.hmdb_ids[0]))
-        print(self.hmdb_df.hmdb_ids[0])
-
+        print(self.hmdb_df.iloc[0,1])
         joined_df = pd.merge(one_id_df, self.hmdb_df, how='left', on='hmdb_ids')
         joined_df = self.check_hmdb_id(joined_df)
         joined_df['join_index'] = np.nan
