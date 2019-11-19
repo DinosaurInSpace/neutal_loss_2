@@ -48,15 +48,23 @@ class MordClass(object):
         # See /mordred_features/mordred_test.ipynb
         calc = Calculator(descriptors)
         m_df = calc.pandas(mols)
+        print(type(m_df))
         m_df = m_df.astype('float64').copy(deep=True)
+        m_df.to_pickle('temp_mord_int.pickle')
         return m_df
 
 
-    def mordred(self, df):
+    def mord_norm(self, df):
         # Use 0-1 norm as sparse for many variables
-        cols = df.columns
-        for c in cols:
+        for c in list(df.columns):
             df[c] = (df[c] - df[c].min()) / (df[c].max() - df[c].min())
+
+        # Get rid of anything not in range 0-1
+        df = df.replace([np.inf, -np.inf], np.nan)
+        df = df.fillna(0)
+        df = df.mask(df > 1, 0)
+        df = df.mask(df < 0, 0)
+        print('norm complete')
         return df
 
 
@@ -65,7 +73,8 @@ class MordClass(object):
         ids = list(hmdb_df.hmdb_ids)
         mols = list(hmdb_df.Molecule)
         m_df = self.mordred(mols)
-        n_df = self.mord_norm(m_df)
+        n_df = m_df.copy(deep=True)
+        n_df = self.mord_norm(n_df)
 
         m_list = list(m_df.to_numpy())
         n_list = list(n_df.to_numpy())
@@ -149,7 +158,7 @@ class HmdbRd(object):
 
 
     def concat(self, one, two):
-        concat = one + two
+        concat = np.append(one,two)
         return concat
 
 
@@ -177,7 +186,7 @@ class HmdbRd(object):
         ids = 'trues'
         bool_dict = {'trues': True, 'falses': False, 'rando': 'Random'}
 
-        for k, v in bool_dict.items:
+        for k, v in bool_dict.items():
             x_df[k] = x_df.apply(lambda x: self.bool_fill(v), axis=1)
         return x_df
 
@@ -193,34 +202,36 @@ class HmdbRd(object):
         # 1) Loads hmdb, 2) calculates various RD-kit things
 
         hmdb_df = self.load_hmdb_df()
-        hmdb_san = self.hmdb_sanitize(hmdb_df)
-        hmdb_out = self.charges(hmdb_san)
+        hmdb_out = self.hmdb_sanitize(hmdb_df)
+        hmdb_out = self.charges(hmdb_out)
         hmdb_out = self.exact_masses(hmdb_out)
         hmdb_out = self.fingerprint_1024(hmdb_out)
         hmdb_out = self.find_mordreds(hmdb_out)
         hmdb_out = self.find_mord_norms(hmdb_out)
         hmdb_out = self.fp_feats(hmdb_out)
         hmdb_out = self.trues_false_rando(hmdb_out)
-
         return hmdb_out
 
 
 ### Body ###
 start_time = time.time()
 
-input_path = 'hmdb_test.pickle' # hmdb_out_molecule
+input_path = 'hmdb_out_molecule' # 'hmdb_test.pickle'
+output_path = 'hmdb_mol_mord.pickle'
 
 mord_loop = MordClass(input_path)
 mord_table = mord_loop.main()
 
+
 db_loop = HmdbRd(input_path, mord_table)
 hmdb_df = db_loop.hmdb_rd_loop()
-
 # Output, 148s
-hmdb_df.to_pickle('hmdb_mol_mord.pickle')
-
-print('\nExecuted without error\n')
-
+hmdb_df.to_pickle(output_path)
 elapsed_time = time.time() - start_time
+# 12,411s
 print ('Elapsed time:\n')
 print (elapsed_time)
+
+print('\nExecuted without error\n')
+print(output_path)
+

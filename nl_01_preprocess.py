@@ -2,13 +2,8 @@ import pandas as pd
 import numpy as np
 from structures_to_search_dicts import target_structures, target_loss_formula
 import rdkit.Chem as Chem
-from rdkit.Chem import rdmolops
-from rdkit.Chem import rdMolDescriptors
-from rdkit.Chem.AllChem import GetMorganFingerprintAsBitVect
-from rdkit.Chem.rdMolDescriptors import CalcMolFormula
-import rdkit.DataStructs
 import time
-import random
+import argparse
 
 
 """
@@ -29,6 +24,9 @@ Previous script in series is:
 Next script in series is:
 "nl_02_join.py"
 
+Example command line:
+python nl_01_preprocess.py -f 'en_nl_exptl_stats.pickle'
+f = file name for metaspace results.
 """
 
 class PreprocessLoop(object):
@@ -97,11 +95,13 @@ class hmdb_rd(object):
     def __init__(self, target_dict):
         self.target_dict = target_dict
 
+
     def load_hmdb_df(self, file_mask):
-        # input file from: HMDB_rdkit_output_analysis.ipynb
+        # input file from: nl_00_hmdb_pre.py
         hmdb_df = pd.read_pickle(file_mask)
         hmdb_df = hmdb_df.rename(columns={'id': 'hmdb_ids'})
         return hmdb_df
+
 
     def get_expt_ids(self, input_df):
         # Sort for all unique values in list of list hmdb_ids
@@ -109,6 +109,7 @@ class hmdb_rd(object):
         hmdb_ids = input_df.hmdb_ids.tolist()
         hmdb_unique = list(set([a for b in hmdb_ids for a in b]))
         return hmdb_unique
+
 
     def hmdb_filt(self, theo_id_row, expt_ids):
         for expt_id in expt_ids:
@@ -135,18 +136,18 @@ class hmdb_rd(object):
 
     def add_targets(self, sanitized_df):
         # Add rdkit filter objects, should be in previous?
-        # Handle case of multiple targets (e.g. CDE) SMARTS "or" clause?
-        # Implemented in hmdb_structure_parser
 
+        target_names = []
         for target, smarts in target_structures.items():
             substruct_object = Chem.MolFromSmarts(smarts)
             target_name = target_loss_formula[target] + '_RDtarget'
             sanitized_df[target_name] = substruct_object
-        return sanitized_df
+            target_names.append(target_name)
+        return [sanitized_df, target_names]
 
 
     def target_present(self, structure, target):
-        # Can find arbitrary structures
+        # Can find arbitrary structures in rd object formats
         search_result = structure.HasSubstructMatch(target)
         return search_result
 
@@ -157,7 +158,7 @@ class hmdb_rd(object):
 
 
     def targets_present(self, targeted_df):
-        # Score for presennce of rd objects in one column as product of two
+        # Score for presence of rd objects in one column as product of two
         # Implemented in hmdb_structure_searcher
         headers = []
         for target, formula in target_loss_formula.items():
@@ -175,63 +176,7 @@ class hmdb_rd(object):
                                                                         x.H2Od_Present,
                                                                         x.H2Oe_Present),
                                                                         axis=1)
-
         return x_df
-
-
-    def charge(self, molecule):
-        charge = Chem.rdmolops.GetFormalCharge(molecule)
-        return charge
-
-
-    def charges(self, searched_df):
-        x_df = searched_df
-        x_df['z'] = x_df.apply(lambda x: self.charge(x['Molecule']), axis=1)
-        return x_df
-
-
-    def exact_mass(self, molecule):
-        exact = Chem.rdMolDescriptors.CalcExactMolWt(molecule)
-        return exact
-
-
-    def exact_masses(self, searched_df):
-        x_df = searched_df
-        x_df['exact_m'] = x_df.apply(lambda x: self.exact_mass(x['Molecule']), axis =1)
-        return x_df
-
-
-    def morgan_fp(self, molecule):
-        fp = Chem.AllChem.GetMorganFingerprintAsBitVect(
-            molecule, radius=2, nBits=1024)
-        return fp
-
-
-    def fp_to_array(self, fp):
-        # Convert the RDKit explicit vectors into numpy arrays
-        np_fps = []
-        arr = np.zeros((1,))
-        rdkit.DataStructs.ConvertToNumpyArray(fp, arr)
-        arr.astype(int)
-        np_fps.append(arr)
-        return np_fps
-
-
-    def molecure_fp_array(self, molecule):
-        fp = self.morgan_fp(molecule)
-        bits = self.fp_to_array(fp)
-        bits = np.array(bits)
-        bits = np.squeeze(bits, axis=None)
-        bits = bits.astype(int)
-        bits = list(bits)
-        return bits
-
-
-    def fingerprint_1024(self, searched_df):
-        # 1024 bit chemical fingerprint, standard settings
-        # written up in "hmdb_water_CO2_results_Exp001"
-        searched_df['bits'] = searched_df['Molecule'].apply(lambda x: self.molecure_fp_array(x))
-        return searched_df
 
 
     def expert_fps(self, searched_df):
@@ -244,8 +189,7 @@ class hmdb_rd(object):
             headers.append(new_head)
 
         present_df = searched_df[headers].copy(deep=True)
-        #Working!
-
+        # Fix some day
         list_of_lists = []
         for row in present_df.itertuples():
             expert_fp = np.array(row)
@@ -256,88 +200,24 @@ class hmdb_rd(object):
         searched_df['expert'] = list_of_lists
         return searched_df
 
-    def concat(self, one, two):
-        concat = one + two
-        return concat
 
-
-    def fp_1024_experts(self, x_df):
-        # Fingerprint concat. of 1024 and expert
-        id = 'fp_1024_expert'
-        x_df[id] = x_df.apply(lambda x: self.concat(x['bits'], x['expert']), axis=1)
+    def drop_targets(self, x_df, col_names):
+        # Drop rdkit objects in df not needed anymore
+        x_df = x_df.drop(columns=col_names)
         return x_df
 
 
-    def bool_fill(selfs, bool):
-        if bool is True:
-            return True
-        elif bool is False:
-            return False
-        else:
-            tf = random.choice([True, False])
-            return tf
+    def hmdb_rd_loop(self, input_df, hmdb_file):
+        # 1) Loads hmdb, 2) finds id's in this expt, 3) is target there?
 
-    def trues(self, x_df):
-        id = 'trues'
-        x_df[id] = x_df.apply(lambda x: self.bool_fill(True), axis=1)
-        return x_df
-
-
-    def falses(self, x_df):
-        id = 'falses'
-        x_df[id] = x_df.apply(lambda x: self.bool_fill(False), axis=1)
-        return x_df
-
-
-    def randoms(self, x_df):
-        id = 'rando'
-        x_df[id] = x_df.apply(lambda x: self.bool_fill('Random'), axis=1)
-        return x_df
-
-
-    def fp_feats(self, x_df):
-        # Fingerprint concat. with features
-        id = 'fp_feats'
-        x_df[id] = x_df.apply(lambda x: self.concat(x['bits'], x['mord_norm']), axis=1)
-        return x_df
-
-
-    def formula(self, mol):
-        form = CalcMolFormula(mol)
-        return form
-
-
-    def formulas(self, x_df):
-        # Fingerprint concat. with features
-        id = 'formula'
-        x_df[id] = x_df.apply(lambda x: self.formula(x['Molecule']), axis=1)
-        return x_df
-
-
-    def hmdb_rd_loop(self, input_df):
-        # 1) Loads hmdb, 2) finds id's in this expt, 3) calculates various RD-kit things
-
-        hmdb_df = self.load_hmdb_df('hmdb_out_molecule')
+        hmdb_df = self.load_hmdb_df(hmdb_file)
         expt_ids = self.get_expt_ids(input_df)
         hmdb_filtered = self.hmdb_filter(expt_ids, hmdb_df)
         hmdb_san = self.hmdb_sanitize(hmdb_filtered)
         hmdb_targeted = self.add_targets(hmdb_san)
-        hmdb_searched = self.targets_present(hmdb_targeted)
-
-        hmdb_searched = self.charges(hmdb_searched)
-        hmdb_searched = self.exact_masses(hmdb_searched)
-        hmdb_searched = self.fingerprint_1024(hmdb_searched)
+        hmdb_searched = self.targets_present(hmdb_targeted[0])
         hmdb_searched = self.expert_fps(hmdb_searched)
-        hmdb_searched = self.fp_1024_experts(hmdb_searched)
-        hmdb_searched = self.trues(hmdb_searched)
-        hmdb_searched = self.falses(hmdb_searched)
-        hmdb_searched = self.randoms(hmdb_searched)
-
-        hmdb_searched = self.mordreds(hmdb_searched)
-        hmdb_searched = self.mord_norms(hmdb_searched)
-        hmdb_searched = self.fp_feats(hmdb_searched)
-        hmdb_searched = self.formulas(hmdb_searched)
-
+        hmdb_searched = self.drop_targets(hmdb_searched, hmdb_targeted[1])
 
         return hmdb_searched
 
@@ -352,29 +232,42 @@ def keys(x):
 ### Body ###
 start_time = time.time()
 
-# Setup main loop classes
+# File names
+parser = argparse.ArgumentParser(description='')
+parser.add_argument("-f", default=None, type=str, help="Metaspace results pickle")
+input_file = parser.parse_args().f
 input_dict = target_loss_formula
-input_file = 'en_nl_exptl_stats.pickle'
+out_stub = input_file.split('.')[0]
+
+# Only needs to be updated if HMDB changes!
+hmdb_file = 'hmdb_mol_mord.pickle'
+
+# Setup main loop classes
 input_df = pd.read_pickle(input_file)
 pre_loop = PreprocessLoop(input_dict, input_df)
 db_loop = hmdb_rd(input_dict)
 
 # Run main loops
 output_df = pre_loop.join_nl_searches()
-hmdb_df = db_loop.hmdb_rd_loop(output_df)
+hmdb_df = db_loop.hmdb_rd_loop(output_df, hmdb_file)
 
 # Fix for cde issue
 hmdb_df.rename({'H2Ocde_Present':'H2O_Present'}, axis=1, inplace=True)
 
 # Manual for now, ID of bits in expert
-hmdb_df['expert_key'] = hmdb_df.apply(lambda x: keys(x), axis = 1 )
+hmdb_df['expert_key'] = hmdb_df.apply(lambda x: keys(x), axis = 1)
 
-# Output, 148s
-output_df.to_pickle('en_nl_01_output_df_exptl.pickle')
-hmdb_df.to_pickle('en_nl_01_hmdb_df_exptl.pickle')
+# Output, 248s
+out_file = out_stub + '_output_01.pickle'
+output_df.to_pickle(out_file)
+out_hmdb = out_stub + '_hmdb_01.pickle'
+hmdb_df.to_pickle(out_hmdb)
 
-print('\nExecuted without error\n')
+
 
 elapsed_time = time.time() - start_time
-print ('Elapsed time:\n')
-print (elapsed_time)
+print('Elapsed time:\n')
+print(elapsed_time)
+print('\nExecuted without error\n')
+print(out_file)
+print(out_hmdb)

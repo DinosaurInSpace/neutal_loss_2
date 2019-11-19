@@ -5,21 +5,7 @@ import time
 import rdkit.Chem as Chem
 from rdkit.Chem import rdFMCS
 from scipy import stats
-
-
-# import pandas
-# from pandas import DataFrame as df
-# import pickle
-# import matplotlib.pyplot as plt
-# from sklearn.metrics import jaccard_score
-# from structures_to_search_dicts import target_nl_mass, target_short_codes
-# from rdkit.Chem import rdmolops
-# from rdkit.Chem import rdMolDescriptors
-# from rdkit.Chem.AllChem import GetMorganFingerprintAsBitVect
-# from rdkit.Chem import AllChem
-# import rdkit.DataStructs
-# from rdkit.Chem import Fragments
-
+import argparse
 
 """
 nl_02_join.py:
@@ -42,6 +28,8 @@ Next script in series is:
 Previous script ion series is:
 "nl_01_preprocess"
 
+Example command:
+python nl_02_join.py --o en_nl_exptl_stats_output_01.pickle --h en_nl_exptl_stats_hmdb_01.pickle
 """
 
 class OneID(object):
@@ -51,6 +39,7 @@ class OneID(object):
 
 
     def clean(self, one_id_list):
+        # Entries are a list with one item.
         one_id = one_id_list[0]
         return one_id
 
@@ -71,10 +60,13 @@ class OneID(object):
     def main_loop(self, one_id_df):
         # Changes list type to str, then simple join on id.
         one_id_df = self.column_clean(one_id_df)
+        #print(type(one_id_df.hmdb_ids[0]))
+        print(self.hmdb_df.hmdb_ids[0])
+
         joined_df = pd.merge(one_id_df, self.hmdb_df, how='left', on='hmdb_ids')
         joined_df = self.check_hmdb_id(joined_df)
         joined_df['join_index'] = np.nan
-        joined_df['MCS_smarts'] = np.nan
+        joined_df = joined_df.rename(columns={'formula_x': 'formula'})
         return joined_df
 
 
@@ -89,6 +81,7 @@ class ManyID(object):
     def find_smarts_common(self, rdobjs):
         # Find common substructure for several hits
         # Try as invalid objects can fail!
+        # Disabled as very slow
         rdobjs = list(rdobjs)
         if len(rdobjs) > 1:
             try:
@@ -173,9 +166,6 @@ class ManyID(object):
         hmdb_hits = self.check_hmdb_id(hmdb_hits)
 
         if hmdb_hits.empty is False:
-
-            smarts = self.find_smarts_common(hmdb_hits.Molecule)
-            molecule = self.smarts_to_rd(smarts)
             join_index = self.index_list[0]
             print(join_index)
 
@@ -189,22 +179,19 @@ class ManyID(object):
                         'inchi': None,
                         'mol_name': '_'.join(hmdb_hits.mol_name),
                         'Smiles': None,
-                        'MCS_smarts': smarts,
-                        'Molecule': molecule,
                         'in_expt': 'True',
                         'z': hmdb_hits.z.mode().iloc[0],
                         'exact_m': hmdb_hits.exact_m.mode().iloc[0],
                         'bits': self.bin_array_avg(list(hmdb_hits.bits))[0],
                         'expert': self.bin_array_avg(list(hmdb_hits.expert))[0],
-                        'fp_1024_expert': self.bin_array_avg(list(hmdb_hits.fp_1024_expert))[0],
                         'expert_key': hmdb_hits.expert_key.iloc[0],
                         'trues': hmdb_hits.trues.mode().iloc[0],
                         'falses': hmdb_hits.falses.mode().iloc[0],
                         'rando': hmdb_hits.rando.mode().iloc[0],
-                        'mordreds': self.bin_array_avg(list(hmdb_hits.mordreds))[0],
-                        'mord_norms': self.bin_array_avg(list(hmdb_hits.mord_norms))[0],
+                        'mordred': self.bin_array_avg(list(hmdb_hits.mordred))[0],
+                        'mord_norm': self.bin_array_avg(list(hmdb_hits.mord_norm))[0],
                         'fp_feats': self.bin_array_avg(list(hmdb_hits.fp_feats))[0],
-                        'formulas': hmdb_hits.x.mode().iloc[0],
+                        #'formulas': hmdb_hits.x.mode().iloc[0],
                         'join_index': join_index
                         }
 
@@ -244,14 +231,38 @@ class ManyID(object):
         return many_merged_df
 
 
+def column_clean(x_df):
+    # Organize and limit extraneous columns carried forward.
+    head = ['formula', 'hmdb_ids', 'mol_name', 'polarity', 'adduct', 'ds_id',
+            'num_ids', 'z', 'exact_m', 'inchi',  'Smiles', 'in_expt']
+    mid_targets = ['_Present', 'fdr', 'colocalization_', 'loss_intensity_share_',
+               'n_loss_only_', 'n_loss_wparent_']
+    tail = ['trues', 'falses', 'rando', 'fp_feats', 'expert','bits', 'mord_norm',
+            'join_index']
+    cols = list(x_df.columns)
+    middle = []
+    for targ in mid_targets:
+        for c in cols:
+            if c.find(targ) != -1:
+                middle.append(c)
+    master = head + middle + tail
+    x_df = x_df[master].copy(deep=True)
+    return x_df
+
+
 ### Body ###
 start_time = time.time()
 
-# Setup classes
+# Setup classes and input files
 hmdb_joined_df = pd.DataFrame()
 formula_dict = target_loss_formula
-input_file = 'en_nl_01_output_df_exptl.pickle'
-input_hmdb = 'en_nl_01_hmdb_df_exptl.pickle'
+
+parser = argparse.ArgumentParser(description='')
+parser.add_argument("--o", default=None, type=str, help="nl_01_preprocess out pickle")
+parser.add_argument("--h", default=None, type=str, help="nl_01_preprocess hmdb pickle")
+args = parser.parse_args()
+input_file = args.o
+input_hmdb = args.h
 
 input_df = pd.read_pickle(input_file)
 hmdb_df = pd.read_pickle(input_hmdb)
@@ -267,18 +278,19 @@ many_df = input_df[input_df.num_ids == True].copy(deep=True)
 one_join = one.main_loop(one_df)
 many_join = many.main_loop(many_df)
 
+one_join = column_clean(one_join)
+many_join = column_clean(one_join)
+
 final_df = pd.concat([one_join, many_join], ignore_index=True, join="outer", sort=True)
 
-# Clean-up and export
-final_df.drop('formula_y', axis=1, inplace=True)
-final_df.rename(columns={'formula_x': 'formula'}, inplace=True)
+# Export
+out_stub = input_file.split('_output_01')[0]
+out_file = out_stub + '_output_02.pickle'
+final_df.to_pickle(out_file)
 
-final_df.to_pickle('en_nl_02_join_exptl.pickle')
-
-# 13,937! Slow, but reduced fails on find MCS.
-# Optional feature, could be removed for speed...
-
-print('\nExecuted without error\n')
+# 784s
 elapsed_time = time.time() - start_time
-print ('Elapsed time:\n')
-print (elapsed_time)
+print('Elapsed time:\n')
+print('\nExecuted without error\n')
+print(elapsed_time)
+print(out_file)

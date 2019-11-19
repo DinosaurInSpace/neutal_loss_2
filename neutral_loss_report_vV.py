@@ -23,7 +23,6 @@ SM_PASS = getpass(prompt='Password: ', stream=None) # Prompts for password in th
 
 DATASETS_WITH_NL = pd.read_csv(StringIO(
 """ds_id,name,polarity,organism,organism_part,analyzer,ionisation_source,maldi_matrix
-2019-09-13_11h37m35s,2019-09-11_FluroSlide5_DAN_75X75_NEG,Negative,Hela cells,Cells,Orbitrap,MALDI,DAN
 2019-07-26_11h26m33s,240719_FDA_HELA _NA_W3_DAN_NEG_190725161642,Negative,Hela cells,Cells,Orbitrap,MALDI,DAN
 2019-07-25_16h23m17s,240719_FDA_HELA _cyto_S1_DAN_NEG,Negative,Hela cells,Cells,Orbitrap,MALDI,DAN
 2019-07-17_17h41m17s,170719_FDA_HELA_S2_DAN_NEG,Negative,Hela cells,Cells,Orbitrap,MALDI,DAN
@@ -39,7 +38,36 @@ DATASETS_WITH_NL = pd.read_csv(StringIO(
 2018-09-14_10h10m06s,13092018_SHA_BrainMSopt_Neg_s100x100_pix100x100,Positive,Mus musculus (mouse),Brain,Orbitrap,MALDI,DHB"""))
 DATASETS_WITH_NL['ds_id'] = DATASETS_WITH_NL.ds_id.str.strip()
 
+# Done
+"""ds_id,name,polarity,organism,organism_part,analyzer,ionisation_source,maldi_matrix
+2019-11-06_22h03m13s,29052019_MZ_spotting_DAN_mz50-300_neg_pix 250X250,Negative,N/A,N/A,Orbitrap,MALDI
+2019-11-06_22h02m36s,27052019_MZ_1st_spotting_DHB_mz120-720_pos,Positive,N/A,N/A,Orbitrap,MALDI
+2019-11-06_22h02m08s,28052019_MZ_1st_spotting_DHB_mz60-360_pos_pix 220X220,Positive,N/A,N/A,Orbitrap,MALDI
+2019-11-06_22h03m38s,29052019_MZ_spotting_DAN_mz140-800_neg,Negative,N/A,N/A,Orbitrap,MALDI,DAN"""
+
+"""ds_id,name,polarity,organism,organism_part,analyzer,ionisation_source,maldi_matrix
+2019-09-13_11h37m35s,2019-09-11_FluroSlide5_DAN_75X75_NEG,Negative,Hela cells,Cells,Orbitrap,MALDI,DAN
+2019-07-26_11h26m33s,240719_FDA_HELA _NA_W3_DAN_NEG_190725161642,Negative,Hela cells,Cells,Orbitrap,MALDI,DAN
+2019-07-25_16h23m17s,240719_FDA_HELA _cyto_S1_DAN_NEG,Negative,Hela cells,Cells,Orbitrap,MALDI,DAN
+2019-07-17_17h41m17s,170719_FDA_HELA_S2_DAN_NEG,Negative,Hela cells,Cells,Orbitrap,MALDI,DAN
+2019-06-14_15h52m24s,FDtest_Exp8A_mixed_Slice6_7-real_well-2,Negative,Hela cells,Tumor,Orbitrap,MALDI,DAN
+2018-05-29_11h23m47s,14052018_coculture_HeLa_NIH3T3_C4_Neg,Negative,Homo sapiens (human) | Mus musculus (mouse),Cervix | Muscle,Orbitrap,MALDI,DAN
+2019-09-19_16h54m19s,14062019_VS_Mouse16_SlideD_lomass_upper_DAN_neg_Slice5,Negative,Mus musculus (mouse),Bone marrow,Orbitrap,MALDI,DAN
+2018-10-29_11h02m58s,26102018_SHA_brainDAN_p100_s80,Negative,Mus musculus (mouse),Brain,Orbitrap,MALDI,DAN
+2019-08-16_18h44m00s,2019-08-16 DDN Gelatin Matrix,Positive,Amino acid standards,N/A,Orbitrap,MALDI,DHB
+2019-08-28_16h39m41s,Hela75x75_5um_A23,Positive,Hela cells,Cells,Orbitrap,MALDI,DHB
+2019-04-30_09h50m09s,20190429_CC_10FA_3_s50p50_pos,Positive,Homo sapiens (human),Liver,Orbitrap,MALDI,DHB
+2017-11-21_10h44m45s,20171107_FT4_DHBpos_p70_s50,Positive,Homo sapiens (human),Liver,Orbitrap,MALDI,DHB
+2019-05-17_18h15m11s,12052019_VS_FDtest_Exp1_Sl1_PFA-1,Positive,Mouse,Lung,Orbitrap,MALDI,DHB
+2018-09-14_10h10m06s,13092018_SHA_BrainMSopt_Neg_s100x100_pix100x100,Positive,Mus musculus (mouse),Brain,Orbitrap,MALDI,DHB"""
+
+# Failed: 2019-09-13_11h37m35s,2019-09-11_FluroSlide5_DAN_75X75_NEG,Negative,Hela cells,Cells,Orbitrap,MALDI,DAN
+# More annotating and queued, try later?
+
+
+
 NEUTRAL_LOSSES = ['-H2O', '-CN', '-NH2', '-COH', '-CO2H']
+# NEUTRAL_LOSSES = ['-H20']
 MAX_FDR = 0.2
 
 #%% Code to reprocess datasets with new neutral losses
@@ -49,16 +77,17 @@ MAX_FDR = 0.2
 # It takes several hours for all datasets to reprocess, and they cannot be accessed or changed
 # while they are reprocessing. Progress can be monitored on the METASPACE website.
 
-sm = SMInstance(host=METASPACE_HOST)
-sm.login(SM_USER, SM_PASS)
-for ds_id in DATASETS_WITH_NL.ds_id:
-    query = """mutation updateNeutralLosses($id: String!, $input: DatasetUpdateInput!) {
-    updateDataset(id: $id, input: $input, reprocess: true, force: true)
-    }"""
-    new_params = {
-    "neutralLosses": NEUTRAL_LOSSES, "molDBs": 'HMDB-SPOTS-KNOWN'
-    }
-    sm._gqclient.query(query, {"id": ds_id, "input": new_params})
+# sm = SMInstance(host=METASPACE_HOST)
+# sm.login(SM_USER, SM_PASS)
+# for ds_id in DATASETS_WITH_NL.ds_id:
+#     query = """mutation updateNeutralLosses($id: String!, $input: DatasetUpdateInput!) {
+#     updateDataset(id: $id, input: $input, reprocess: true, force: true)
+#     }"""
+#     new_params = {
+#         "neutralLosses": NEUTRAL_LOSSES,
+#         "molDBs": 'HMDB-SPOTS-KNOWN'
+#     }
+#     sm._gqclient.query(query, {"id": ds_id, "input": new_params})
 
 
 #%% Helper functions for retrieving data from METASPACE
@@ -72,7 +101,6 @@ ANNOTATION_FIELDS = ("sumFormula neutralLoss adduct mz msmScore fdrLevel offSamp
 def get_ion_images_for_analysis(img_ids, hotspot_percentile=99, max_size=None, max_mem_mb=2048):
     """Retrieves ion images, does hot-spot removal and resizing,
     and returns them as numpy array.
-
     Args:
         img_ids (list[str]):
         hotspot_percentile (float):
@@ -81,7 +109,6 @@ def get_ion_images_for_analysis(img_ids, hotspot_percentile=99, max_size=None, m
         max_mem_mb (Union[None, float]):
             If the output numpy array would require more than this amount of memory,
             images will be downsampled to fit
-
     Returns:
         tuple[np.ndarray, np.ndarray, tuple[int, int]]
             (value, mask, (h, w))
@@ -121,29 +148,31 @@ def get_ion_images_for_analysis(img_ids, hotspot_percentile=99, max_size=None, m
         value = np.empty((len(img_ids), h * w), dtype=np.float32)
 
     def process_img(img_id, idx, do_setup=False):
-        img = Image.open(session.get(f'{METASPACE_HOST}/fs/iso_images/{img_id}', stream=True).raw)
-        if do_setup:
-            setup_shared_vals(img)
+        resp = session.get(f'{METASPACE_HOST}/fs/iso_images/{img_id}', stream=True)
+        if resp.ok:
+            img = Image.open(resp.raw)
+            if do_setup:
+                setup_shared_vals(img)
 
-        img_arr = np.asarray(img, dtype=np.float32)[:, :, 0]
+            img_arr = np.asarray(img, dtype=np.float32)[:, :, 0]
 
-        # Try to use the hotspot percentile,
-        # but fall back to the image's maximum or 1.0 if needed
-        # to ensure that there are no divide-by-zero issues
-        hotspot_threshold = np.percentile(img_arr, hotspot_percentile) or np.max(img_arr) or 1.0
-        np.clip(img_arr, None, hotspot_threshold, out=img_arr)
+            # Try to use the hotspot percentile,
+            # but fall back to the image's maximum or 1.0 if needed
+            # to ensure that there are no divide-by-zero issues
+            hotspot_threshold = np.percentile(img_arr, hotspot_percentile) or np.max(img_arr) or 1.0
+            np.clip(img_arr, None, hotspot_threshold, out=img_arr)
 
-        if zoom_factor != 1:
-            zoomed_img = zoom(img_arr, zoom_factor)
-        else:
-            zoomed_img = img_arr
+            if zoom_factor != 1:
+                zoomed_img = zoom(img_arr, zoom_factor)
+            else:
+                zoomed_img = img_arr
 
-        # Note: due to prefiltering & smoothing, zoom can change the min/max of the image,
-        # so hotspot_threshold cannot be reused here for scaling
-        np.clip(zoomed_img, 0, None, out=zoomed_img)
-        zoomed_img /= np.max(zoomed_img) or 1
+            # Note: due to prefiltering & smoothing, zoom can change the min/max of the image,
+            # so hotspot_threshold cannot be reused here for scaling
+            np.clip(zoomed_img, 0, None, out=zoomed_img)
+            zoomed_img /= np.max(zoomed_img) or 1
 
-        value[idx, :] = zoomed_img.ravel()
+            value[idx, :] = zoomed_img.ravel()
 
     session = requests.Session()
     session.mount(METASPACE_HOST, HTTPAdapter(max_retries=5, pool_maxsize=100))
@@ -154,9 +183,13 @@ def get_ion_images_for_analysis(img_ids, hotspot_percentile=99, max_size=None, m
 
     return value, mask, (h, w)
 
+
 # DB's: {'HMDB-v4-endogenous', 'HMDB-v4', 'HMDB-ENDO-DETECTED', 'HMDB-SPOTS-KNOWN'}
 def get_single_dataset_images(ds_id, fdr=0.5):
     gql = GraphQLClient(get_config(METASPACE_HOST, email=SM_USER, password=SM_PASS))
+    ds = gql.getDataset(ds_id)
+    assert ds['status'] == 'FINISHED', f'Wrong status {ds["status"]}'
+
     gql.ANNOTATION_FIELDS = ANNOTATION_FIELDS # Override selected fields to include neutral losses, HMDB IDs, etc.
     anns = gql.getAnnotations({'database': 'HMDB-SPOTS-KNOWN', 'fdrLevel': fdr, 'hasNeutralLoss': None},
                               {'ids': ds_id})
@@ -249,8 +282,16 @@ def get_ds_neutral_loss_stats(ds_id, fdr):
 
     return df
 
-nl_stats = pd.concat([get_ds_neutral_loss_stats(ds_id, MAX_FDR) for ds_id in DATASETS_WITH_NL.ds_id])
-nl_stats.to_pickle(f'{BASE_PATH}/endo_expt.pickle')
+
+nl_stats_list = []
+for ds_id in DATASETS_WITH_NL.ds_id:
+    try:
+        nl_stats_list.append(get_ds_neutral_loss_stats(ds_id, MAX_FDR))
+    except Exception as e:
+        print(f'Error while getting nl stats for ds_id={ds_id}: {str(e)}')
+
+nl_stats = pd.concat(nl_stats_list)
+nl_stats.to_pickle(f'{BASE_PATH}/known_nl_stats.pickle')
 
 #%%
 #%%

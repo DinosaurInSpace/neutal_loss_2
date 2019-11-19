@@ -1,10 +1,13 @@
 import pandas as pd
+from pandas import DataFrame as df
+import numpy as np
+
 from structures_to_search_dicts import target_structures, target_loss_formula
 import time
 from nl_03_params import search_params
 from nl_03_params import model_params
-import numpy as np
 
+from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import LinearSVC
@@ -14,33 +17,8 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.svm import SVC
 from sklearn.neural_network import MLPClassifier
-from sklearn.metrics import confusion_matrix
 
-from sklearn.tree import export_graphviz
-
-
-
-
-
-
-
-import rdkit.Chem as Chem
-from rdkit.Chem import rdFMCS
-from scipy import stats
-
-
-import pandas
-from pandas import DataFrame as df
-import pickle
-import matplotlib.pyplot as plt
-from sklearn.metrics import jaccard_score
-from structures_to_search_dicts import target_nl_mass, target_short_codes
-from rdkit.Chem import rdmolops
-from rdkit.Chem import rdMolDescriptors
-from rdkit.Chem.AllChem import GetMorganFingerprintAsBitVect
-from rdkit.Chem import AllChem
-import rdkit.DataStructs
-from rdkit.Chem import Fragments
+import argparse
 
 """
 nl_02_join.py:
@@ -60,6 +38,14 @@ prediction (expert/fp), model to test.  Dict of lists.
 
 Previous script ion series is:
 "nl_02_join.py"
+
+Next script in series is:
+"tbd"
+
+Example command line:
+
+python nl_03_filter_model.py --i en_nl_exptl_stats_output_02.pickle
+
 """
 
 class CombiFilters(object):
@@ -74,9 +60,9 @@ class CombiFilters(object):
                                           'polarity',
                                           'struct_target',
                                           'obs_loss_type',
-                                          'theo_prediction',
-                                          'fdr',
-                                          'coloc'])
+                                          'prediction',
+                                          'any_fdr',
+                                          'any_coloc'])
 
         x = self.search_params
 
@@ -85,7 +71,11 @@ class CombiFilters(object):
             for polarity in x['polarities']:
                 for struct_target in x['struct_targets']:
                     for obs_loss_type in x['obs_loss_types']:
-                        for theo_prediction in x['theo_predictions']:
+                        if model is 'direct':
+                            y_pred = 'direct_comp'
+                        elif model != 'direct':
+                            y_pred = 'theo_predictions'
+                        for y in x[y_pred]:
                             for fdr in x['any_fdrs']:
                                 for coloc in x['any_colocalizations']:
                                     n +=1
@@ -94,12 +84,13 @@ class CombiFilters(object):
                                            'polarity': polarity,
                                            'struct_target': struct_target,
                                            'obs_loss_type': obs_loss_type,
-                                           'theo_prediction': theo_prediction,
+                                           'prediction': y,
                                            'any_fdr': fdr,
                                            'any_coloc': coloc
                                            }
                                     filter_df = filter_df.append(row, ignore_index=True)
 
+        filter_df = filter_df.set_index(['n'])
         return filter_df
 
 
@@ -109,34 +100,31 @@ class BuildTest(object):
         self.out_list = out_list
 
 
-    def column_finder(self, column_list, target_string):
-        out_columns = []
-        for column in column_list:
-            if target_string in column:
-                out_columns.append(column)
-        return(out_columns)
+    def any(self, df_row, target, co_or_fdr):
+        # Searches for best fdr or coloc per row, only considering
+        # parent and NL under investigation
+        if len(target) == 4 and target[0:3] == 'H2O':
+            target = 'H2O'
+        if co_or_fdr == 'fdr':
+            nl = 'fdr_' + target
+            return(float(min(df_row['fdr'], df_row[nl])))
+        elif co_or_fdr == 'colocalization':
+            nl = 'colocalization_' + target
+            return (float(df_row[nl]))
 
 
-    def any_fdr(self, df_row):
-        column_list = self.column_finder(list(df_row.index), 'fdr')
-        best_fdr = df_row[column_list].min()
-        best_fdr = float(best_fdr)
-        return best_fdr
-
-
-    def any_coloc(self, df_row):
-        column_list = self.column_finder(list(df_row.index), 'colocalization')
-        best_coloc = df_row[column_list].max()
-        best_coloc = float(best_coloc)
-        return best_coloc
-
-
-    def join_update(self, join_df):
+    def join_update(self, join_df, target):
         #Add 'any fdr' to filter by, using best in case of parent and loss.
-        join_df['any_fdr'] = join_df.apply(self.any_fdr, axis=1)
+        join_df['any_fdr'] = join_df.apply((lambda x: self.any(x,
+                                                               target,
+                                                               'fdr')),
+                                                                axis=1)
 
         # Add 'any coloc' to filter by, using best in case of parent and loss.
-        join_df['any_coloc'] = join_df.apply(self.any_coloc, axis=1)
+        join_df['any_coloc'] = join_df.apply((lambda x: self.any(x,
+                                                               target,
+                                                               'colocalization')),
+                                                                axis=1)
 
         join_df.astype({'any_fdr': 'float','any_coloc': 'float'})
         return join_df
@@ -144,7 +132,7 @@ class BuildTest(object):
 
     def build_columns(self, row):
         obs = row.obs_loss_type + '_' + row.struct_target
-        theo = row.theo_prediction
+        theo = row.prediction
         columns = ['any_fdr', 'any_coloc', 'polarity', obs, theo]
         return columns
 
@@ -154,8 +142,10 @@ class BuildTest(object):
         fdr = float(filter.any_fdr)
         coloc = float(filter.any_coloc)
 
+        # Coloc = 0 include as well!
         x_df = x_df[(x_df['any_fdr'] <= fdr) &
-                    (x_df['any_coloc'] >= coloc) &
+                    ((x_df['any_coloc'] >= coloc) |
+                      (x_df['any_coloc'] == 0)) &
                     (x_df['polarity'] == pol)
                     ]
         return x_df
@@ -212,74 +202,96 @@ class BuildTest(object):
         else:
             exit('Model_unknown')
 
+    def confuse(self, obs_y, theo_y):
+        # Copy from confuse ipynb
+        con = confusion_matrix(list(obs_y), list(theo_y))
+        if con.shape == (1, 1):
+            return [np.nan, np.nan, np.nan, np.nan]
 
-    def filter_loop(self, curr_filter_series):
-        filter = curr_filter_series
-        print(filter.n)
+        elif con.shape == (2, 2):
+            tn, fp, fn, tp = con.ravel()
+            sens = tpr = tp / (tp + fn)
+            spec = tnr = tn / (tn + fp)
+            f1 = (2 * tp) / (2 * tp + fp + fn)
+            acc = (tp + tn) / (tp + tn + fp + fn)
+            return [sens, spec, f1, acc]
+
+        else:
+            exit(1)
+
+
+    def filter_loop(self, filter):
+        # filter is current filter from apply
+        print(filter.index)
         print('\n')
         print(filter)
 
         # Build columns and df
         col_f_filter = self.build_columns(filter)
-
         current_df = self.join_df[col_f_filter].copy(deep=True)
 
         # Filter on fdr, coloc, and polarity
         current_df = self.filter_3x(current_df, filter)
 
         # nans should,be gone and types should be consistent...
-        obs_y = np.array(current_df.iloc[:,-2].astype('bool'))
-        current_df['out_x'] = current_df.iloc[:, -1].apply(list)
-        theo_x = np.array(list(current_df['out_x'])).astype(bool)
+        obs_y = np.array(current_df.iloc[:,-2]) #.astype('bool'))
+        theo_x = np.array(current_df.iloc[:, -1]) #.astype('bool'))
+        #current_df['out_x'] = current_df.iloc[:, -1].apply(list)
+        #theo_x = np.array(list(current_df['out_x'])).astype(bool)
 
-        # Split and get counts
-        x_train, x_test, y_train, y_test = train_test_split(theo_x, obs_y, random_state=0)
-        train_l = y_train.shape[0]
-        test_l = y_test.shape[0]
-        size = (train_l, test_l, train_l + test_l)
+        # No fancy stuff needed to directly compare two columns:
 
-        # Select and train model
-        model = self.select_train(filter.model, x_train, y_train)
+        if type(theo_x[0]).__module__ != np.__name__ and type(theo_x[0]) != list:
+            results = self.confuse(obs_y, theo_x)
+            size = len(obs_y)
+            t_size = sum(obs_y)
+            accuracy_test = results[3]
+            accuracy_train = accuracy_test
+            specificity = results[0]
+            sensitivity = results[1]
+            f1 = results[2]
 
-        # Test model
-        accuracy_train = model.score(x_train, y_train)
-        accuracy_test = model.score(x_test, y_test)
+        else:
+            obs_y = list(obs_y)
+            theo_x = list(theo_x)
+            print('complicated')
+            x_train, x_test, y_train, y_test = train_test_split(theo_x, obs_y, random_state=0)
+            train_l = len(y_train)
+            test_l = len(y_test)
+            size = (train_l, test_l, train_l + test_l)
+            t_size = (np.count_nonzero(y_train),
+                      np.count_nonzero(y_test),
+                      np.count_nonzero(y_train + y_test))
 
-        y_predict = model.predict(x_test)
+            # Select and train model
+            model = self.select_train(filter.model, x_train, y_train)
+
+            # Test model
+            accuracy_train = model.score(x_train, y_train)
+            accuracy_test = model.score(x_test, y_test)
+
+            y_predict = model.predict(x_test)
+            results = self.confuse(y_test, y_predict)
+            specificity = results[0]
+            sensitivity = results[1]
+            f1 = results[2]
 
         # Add values to filter and return
         filter['n_train_test_total'] = size
-        filter['n_true_train'] = np.count_nonzero(y_train)
-        filter['n_true_test'] = np.count_nonzero(y_test)
+        filter['n_train_test_true'] = t_size
         filter['accuracy_train'] = accuracy_train
         filter['accuracy_test'] = accuracy_test
-
-        '''
-        # https://scikit-learn.org/stable/modules/generated/sklearn.metrics.confusion_matrix.html
-        
-        tn, fp, fn, tp = confusion_matrix(y_test, y_predict).ravel()
-        filter['tp'] = tp
-        filter['fp'] = fp
-        filter['tn'] = tn
-        filter['fn'] = fn
-
-        # https://en.wikipedia.org/wiki/Confusion_matrix
-        filter['tpr'] = tp / (tp + fn)
-        filter['tnr'] = tn / (tn + fp)
-        filter['fnr'] = fn / (fn + tp)
-        filter['fpr'] = fp / (fp + tn)
-        filter['ppv'] = tp / (tp + fp)
-        filter['npv'] = tn / (tn + fn)
-        filter['fdr'] = fp / (fp + tp)
-        '''
+        filter['specificity'] = specificity
+        filter['sensitivity'] = sensitivity
+        filter['f1'] = f1
 
         self.out_list.append(filter)
+        return filter.index
 
-        return filter.n
 
-
-    def main_loop(self, filters):
-        self.join_df = self.join_update(self.join_df)
+    def main_loop(self, filters, target):
+        # Creates 'any_fdr' and 'any_coloc' columns
+        self.join_df = self.join_update(self.join_df, target)
 
         # Use apply to vectorize filtering steps!
         filters['model_results'] = filters.apply(self.filter_loop, axis=1)
@@ -288,6 +300,7 @@ class BuildTest(object):
 
 
 class ExportViz(object):
+    # To write
     def __init__(self, join_df):
         self.join_df = join_df
 
@@ -295,34 +308,45 @@ class ExportViz(object):
     def main_loop(self, model_df):
         pass
 
-def tidy(df):
-    df = df.drop(columns=['fdr', 'coloc'])
-
-    return df
+        return df
 
 ### Body ###
 start_time = time.time()
 
+# Setup input files
+parser = argparse.ArgumentParser(description='')
+parser.add_argument("--i", default=None, type=str, help="nl_02_output_02.pickle")
+args = parser.parse_args()
+input_file = args.i
+
+
 # Setup classes
 formula_dict = target_loss_formula
-input_file = 'nl_02_join_final.pickle'
 join_df = pd.read_pickle(input_file)
 out_list = []
 
 find_filters = CombiFilters(search_params)
 setup_models = BuildTest(join_df, out_list)
-print_results = ExportViz(join_df)
+#print_results = ExportViz(join_df)
 
 # Run main loop t=61s
 filters = find_filters.main_loop()
-model_df = setup_models.main_loop(filters)
-#results = print_results.main_loop(model_df)
 
+for target in filters.struct_target.unique():
+    current_filters = filters[filters.struct_target == target]
+    model_df = setup_models.main_loop(current_filters, target)
+    #results = print_results.main_loop(model_df)
+
+# Clean-up and export
 out_df = pd.DataFrame(out_list)
-out_df = tidy(out_df)
-out_df.to_pickle('nl_03_water_both.pickle')
 
-print('\nExecuted without error\n')
+out_stub = input_file.split('_output_02')[0]
+out_file = out_stub + '_output_03.pickle'
+out_df.to_pickle(out_file)
+
 elapsed_time = time.time() - start_time
 print ('Elapsed time:\n')
 print (elapsed_time)
+print('\nExecuted without error\n')
+print(out_file)
+
