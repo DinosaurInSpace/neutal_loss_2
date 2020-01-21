@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from structures_to_search_dicts import target_structures, target_loss_formula
+from structures_to_search_dicts_water import target_structures, target_loss_formula # Hardcoded neutral loss params
 import rdkit.Chem as Chem
 import time
 import argparse

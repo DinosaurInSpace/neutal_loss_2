@@ -7,12 +7,12 @@ This file contains the parameters to be using for filtering the joined dataframe
 
 # trues, falses, rando, mord_norm, fp_feats
 
-search_params = {'models': ['direct', 'random_forest'],
+search_params = {'models': ['sv_machine'],
                  'polarities': ['negative', 'positive'],
                  'struct_targets': ['H2Oe'],
                  'obs_loss_types': ['n_loss_wparent'],
-                 'theo_predictions': ['expert', 'bits', 'mord_norm', 'fp_feats'],
-                 'direct_comp': ['H2O_Present', 'trues', 'falses', 'rando'],
+                 'theo_predictions': ['bits', 'mord_norm', 'fp_feats'],
+                 'direct_comp': [],
                  'any_fdrs': [0.2 , 0.1 , 0.05],
                  'any_colocalizations': [0, 0.5, 0.75]
                  }
@@ -23,7 +23,7 @@ model_params = {'kneighbors': {'n_neighbors': 3},
                 'decision_tree': {'max_depth': 5, 'random_state': 0},
                 'random_forest': {'max_features': 32, 'n_estimators': 100, 'random_state':0},
                 'gb_machine': {'random_state': 0, 'max_depth': 3},
-                'sv_machine': {'kernel': 'rbf', 'C': 10, 'gamma': 1.0},
+                'sv_machine': {'kernel': 'linear', 'C': 10, 'gamma': 1.0},
                 'neural_network': {'solver': 'lbfgs', 'random_state':0}
                 }
 

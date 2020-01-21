@@ -84,7 +84,7 @@ class ManyID(object):
         rdobjs = list(rdobjs)
         if len(rdobjs) > 1:
             try:
-                compare = rdFMCS.FindMCS(rdobjs, timeout=180)
+                compare = rdFMCS.FindMCS(rdobjs, timeout=6)
                 smarts = compare.smartsString
                 return smarts
             except:

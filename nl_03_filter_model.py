@@ -17,6 +17,8 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.svm import SVC
 from sklearn.neural_network import MLPClassifier
+from sklearn.model_selection import GroupKFold
+from sklearn.model_selection import cross_val_score
 
 import argparse
 
@@ -95,9 +97,10 @@ class CombiFilters(object):
 
 
 class BuildTest(object):
-    def __init__(self, join_df, out_list):
+    def __init__(self, join_df, out_list, groupk):
         self.join_df = join_df
         self.out_list = out_list
+        self.groupk = groupk
 
 
     def any(self, df_row, target, co_or_fdr):
@@ -133,7 +136,7 @@ class BuildTest(object):
     def build_columns(self, row):
         obs = row.obs_loss_type + '_' + row.struct_target
         theo = row.prediction
-        columns = ['any_fdr', 'any_coloc', 'polarity', obs, theo]
+        columns = ['any_fdr', 'any_coloc', 'polarity', 'formula', obs, theo]
         return columns
 
 
@@ -189,9 +192,9 @@ class BuildTest(object):
                                               max_depth=y).fit(x_train, y_train)
 
         elif model is 'sv_machine':
-            x = model_params['sv_machine']['kernel']
-            y = model_params['sv_machine']['C']
-            z = model_params['sv_machine']['gamma']
+            x = str(model_params['sv_machine']['kernel'])
+            y = float(model_params['sv_machine']['C'])
+            z = float(model_params['sv_machine']['gamma'])
             return SVC(kernel=x, C=y, gamma=z).fit(x_train, y_train)
 
         elif model is 'neural_network':
@@ -214,7 +217,9 @@ class BuildTest(object):
             spec = tnr = tn / (tn + fp)
             f1 = (2 * tp) / (2 * tp + fp + fn)
             acc = (tp + tn) / (tp + tn + fp + fn)
-            return [sens, spec, f1, acc]
+            con = {'tn': tn, 'fp': fp, 'fn': fn, 'tp': tp}
+            prec = tp / (tp + fp)
+            return [sens, spec, f1, acc, con]
 
         else:
             exit(1)
@@ -239,6 +244,7 @@ class BuildTest(object):
         print(filter.prediction)
         obs_y = np.array(current_df[obs_y_col])
         theo_x = np.array(current_df[filter.prediction])
+        cats = np.array(current_df['formula'])
 
         # No fancy stuff needed to directly compare two columns:
         if filter.prediction in search_params['direct_comp']:
@@ -251,18 +257,37 @@ class BuildTest(object):
             sensitivity = results[0]
             specificity = results[1]
             f1 = results[2]
+            cross_a = 0
+            cross_s = 0
+            prec = results[4]
 
         elif filter.prediction in search_params['theo_predictions']:
             print('complicated')
-            obs_y = list(obs_y)
-            theo_x = list(theo_x)
-            x_train, x_test, y_train, y_test = train_test_split(theo_x, obs_y, random_state=0)
+
+            # Should work directly on numpy array?
+            obs_y = np.array(list(obs_y))
+            theo_x = np.array(list(theo_x))
+
+            if self.groupk == False:
+                print('train_test')
+                x_train, x_test, y_train, y_test = train_test_split(theo_x, obs_y, random_state=0)
+
+            else:
+                print('group_k')
+                group_kfold = GroupKFold(n_splits=2)
+                group_kfold.get_n_splits(theo_x, obs_y, cats)
+
+                for train_index, test_index in group_kfold.split(theo_x, obs_y, cats):
+                    x_train, x_test = theo_x[train_index], theo_x[test_index]
+                    y_train, y_test = obs_y[train_index], obs_y[test_index]
+
             train_l = len(y_train)
             test_l = len(y_test)
             size = (train_l, test_l, train_l + test_l)
             t_size = (np.count_nonzero(y_train),
                       np.count_nonzero(y_test),
-                      np.count_nonzero(y_train + y_test))
+                      (np.count_nonzero(y_train)
+                      + np.count_nonzero(y_test)))
 
             # Select and train model
             model = self.select_train(filter.model, x_train, y_train)
@@ -276,15 +301,32 @@ class BuildTest(object):
             sensitivity = results[0]
             specificity = results[1]
             f1 = results[2]
+            con = results[3]
+            prec = results[4]
+
+            # Cross val:
+            scores = cross_val_score(model,
+                                     theo_x,
+                                     obs_y,
+                                     cats,
+                                     cv=GroupKFold(n_splits=5)
+                                     )
+            cross_a = float(scores.mean())
+            cross_s = float(scores.std())
 
         # Add values to filter and return
         filter['n_train_test_total'] = size
         filter['n_train_test_true'] = t_size
         filter['accuracy_train'] = accuracy_train
         filter['accuracy_test'] = accuracy_test
-        filter['sensitivity'] = sensitivity
+        filter['cross_a'] = cross_a
+        filter['cross_s'] = cross_s
+        filter['precision'] = prec
+        filter['sens_recall'] = sensitivity
         filter['specificity'] = specificity
         filter['f1'] = f1
+        filter['con'] = con
+
 
         self.out_list.append(filter)
         return filter.index
@@ -320,6 +362,9 @@ parser.add_argument("--i", default=None, type=str, help="nl_02_output_02.pickle"
 args = parser.parse_args()
 input_file = args.i
 
+# If on, will use groupK on formulas, if off, will not
+groupk = True
+
 
 # Setup classes
 formula_dict = target_loss_formula
@@ -327,7 +372,7 @@ join_df = pd.read_pickle(input_file)
 out_list = []
 
 find_filters = CombiFilters(search_params)
-setup_models = BuildTest(join_df, out_list)
+setup_models = BuildTest(join_df, out_list, groupk)
 #print_results = ExportViz(join_df)
 
 # Run main loop t=61s
