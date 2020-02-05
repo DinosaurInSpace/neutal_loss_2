@@ -62,10 +62,12 @@ if reprocess == True:
 
 #%% Helper functions for retrieving data from METASPACE
 
-ANNOTATION_FIELDS = ("sumFormula neutralLoss adduct mz msmScore fdrLevel offSample "
+ANNOTATION_FIELDS = ("sumFormula neutralLoss adduct mz msmScore fdrLevel offSample ion ionFormula "
                      "dataset { id } "
                      "possibleCompounds { information { databaseId } } "
-                     "isotopeImages { url maxIntensity totalIntensity }")
+                     "isotopeImages { url maxIntensity totalIntensity } "
+                     "isomers { ion } "
+                     "isobars { ion msmScore } ")
 
 
 def get_ion_images_for_analysis(img_ids, hotspot_percentile=99, max_size=None, max_mem_mb=2048):
@@ -170,6 +172,8 @@ def get_single_dataset_images(ds_id, fdr=0.5):
         dict(
             image=images[i],
             formula=ann['sumFormula'],
+            ion=ann['ion'],
+            ion_formula=ann['ionFormula'],
             neutral_loss=ann['neutralLoss'],
             adduct=ann['adduct'],
             msm=ann['msmScore'],
@@ -179,7 +183,9 @@ def get_single_dataset_images(ds_id, fdr=0.5):
             # intensity_max=ann['isotopeImages'][0]['maxIntensity'],
             # intensity_99th=ann['isotopeImages'][0]['totalIntensity'] * np.percentile(images[i][images[i] != 0], 99),
             intensity_avg=ann['isotopeImages'][0]['totalIntensity'] / np.count_nonzero(images[i]),
-        ) for i, ann in enumerate(anns)])
+            isobars=[isobar['ion'] for isobar in ann['isobars'] if isobar['msmScore'] > ann['msmScore']],
+            isomers=[isomer['ion'] for isomer in ann['isomers']],
+    ) for i, ann in enumerate(anns)])
     return anns_df, images, mask, h, w
 
 
